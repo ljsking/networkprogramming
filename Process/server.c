@@ -12,7 +12,14 @@ char *escapechar ="exit";
  
 int main(int argc, char *argv[]) 
 { 
-	int s_d, c_d; 
+	fd_set master;   // master file descriptor list
+	fd_set read_fds; // temp file descriptor list for select()
+	int listener;
+	int fdmax;
+	
+	FD_ZERO(&master);    // clear the master and temp sets
+	FD_ZERO(&read_fds);
+	
 	int clilen, num; 
 	char sendline[MAXLINE], recvline[MAXLINE]; 
 	int size; 
@@ -24,52 +31,23 @@ int main(int argc, char *argv[])
 		exit(0); 
 	} 
 
-	s_d = socket(AF_INET, SOCK_STREAM,0); 
+	listener = socket(AF_INET, SOCK_STREAM,0); 
 	memset((char *)&server_addr, 0, sizeof(server_addr)); 
 
 	server_addr.sin_family = AF_INET; 
 	server_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
 	server_addr.sin_port = htons(atoi(argv[1])); 
 
-	bind(s_d, (struct sockaddr *)&server_addr, sizeof(server_addr)); 
-	listen(s_d, 1); 
-	printf("waiting client\n"); 
-	clilen = sizeof(client_addr); 
+	bind(listener, (struct sockaddr *)&server_addr, sizeof(server_addr)); 
+	listen(listener, 1); 
+	// add the listener to the master set
+    FD_SET(listener, &master);
 
-	if ((c_d = accept(s_d, (struct sockaddr *)&client_addr, &clilen)) < 0) { 
-		printf("accept failed\n"); 
-		exit(0); 
-	} 
-	printf("accept client\n"); 
-	if ((pid = fork()) > 0) { 
-		while(fgets(sendline, MAXLINE, stdin) != NULL) { 
-			size = strlen(sendline); 
-			if (write(c_d, sendline, strlen(sendline)) != size) { 
-				printf("error write\n"); 
-				exit(0); 
-			} 
-			if (strstr(sendline, escapechar) != NULL) { 
-				printf("bye~~bye~~~\n"); 
-				close(c_d); 
-				exit(0); 
-			} 
-		} 
-		exit(0);
-	} else if (pid == 0) { 
-		while(1) { 
-			if ((size = read(c_d, recvline, MAXLINE)) < 0) { 
-				printf("error read\n"); 
-				close(c_d); 
-				exit(0); 
-			} 
-			recvline[size] = '\0'; 
-			if (strstr(recvline, escapechar) != NULL) { 
-				printf("client exit\n"); 
-				break; 
-			} 
-			printf("msg : %s\n", recvline); 
-		} 
-	} 
-	close(s_d); 
-	close(c_d); 
+    // keep track of the biggest file descriptor
+    fdmax = listener; // so far, it's this one
+	while(1)
+	{
+		read_fds = master; // copy it
+		
+	}
 }

@@ -186,6 +186,7 @@ void *thread_func(void *data)
 {
 	const int MAXDATASIZE = 255;
     char buf[MAXDATASIZE];
+	char buff[MAXDATASIZE];
     int mysocket;
     int mynum = *((int *)data); 
     multimap<int, ph>::iterator mi;
@@ -220,10 +221,18 @@ void *thread_func(void *data)
 		        exit(1);
 		    }
 		    buf[numbytes] = '\0';
-		    cout<<"client: received "<<buf;
+			sprintf(buff, "<%d>: %s", mynum, buf);
             if (strstr(buf, "quit") == NULL)
             {
-                write(mysocket, buf, 255);
+				mi = s_info.phinfo.begin();
+                while(mi != s_info.phinfo.end())
+                {
+					if(mi->first && mi->second.index_num!=mynum)
+					{
+						send(mi->second.sockfd, buff, MAXDATASIZE, 0);
+					}
+					mi++;
+				}
             }
             else
             {

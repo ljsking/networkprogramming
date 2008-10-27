@@ -42,12 +42,43 @@
  ****************************************************************************/
 
  #include <QtGui>
-
+ #include <sys/msg.h>
+ #include <qtextstream.h>
  #include "dialog.h"
 
  ChatDialog::ChatDialog(QWidget *parent)
      : QDialog(parent)
  {
-     setupUi(this);
-	 textEdit->setReadOnly(true);
+	setupUi(this);
+	key_t key; 
+	key = ftok("chatserver", 'm');
+	if ((thread.msgqueue_id = msgget(key, IPC_CREAT|0660)) == -1)
+		thread.msgqueue_id = -1;
+	QString str = QString( "%1" )
+                        .arg( thread.msgqueue_id);
+	
+	QMessageBox mb( "Application name here",
+        str,
+		QMessageBox::Information,
+        QMessageBox::Yes | QMessageBox::Default,
+        QMessageBox::No,
+        QMessageBox::Cancel | QMessageBox::Escape );
+	mb.setButtonText( QMessageBox::Yes, "Save" );
+    mb.setButtonText( QMessageBox::No, "Discard" );
+    switch( mb.exec() ) {
+    case QMessageBox::Yes:
+        // save and exit
+        break;
+    case QMessageBox::No:
+        // exit without saving
+        break;
+    case QMessageBox::Cancel:
+        // don't save and don't exit
+        break;
+    }
+
+
+	textEdit->setReadOnly(true);
+	thread.edit = textEdit;
+	thread.start();
  }

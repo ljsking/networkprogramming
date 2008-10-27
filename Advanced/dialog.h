@@ -45,6 +45,7 @@
  #define CHATDIALOG_H
 
  #include "ui_gui.h"
+ #include "myThread.h"
 
  class ChatDialog : public QDialog, private Ui::Dialog
  {
@@ -52,6 +53,9 @@
 
  public:
      ChatDialog(QWidget *parent = 0);
+	 MyThread thread;
+ private:
+	int msgqueue_id;
  };
 
  #endif

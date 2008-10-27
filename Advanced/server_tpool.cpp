@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/msg.h> 
 
 // 최대 쓰레드 POOL 크기
 #define MAX_THREAD_POOL 256
@@ -30,6 +31,7 @@ struct schedul_info
 {
     int client_num;       // 현재 연결된 클라이언트수
     int current_sockfd;   // 가장최근에 만들어진 소켓지시자
+	int msgqueue_id; 
     multimap<int, ph> phinfo; 
 };
 
@@ -51,6 +53,10 @@ void *thread_func(void *data);
 // 한마디로 디버깅용 
 void *mon_thread(void *data);
 
+int create_msg_queue(int &);
+
+int send_message(int, char *);
+
 schedul_info s_info;
 
 // 메인 함수
@@ -64,7 +70,7 @@ int main(int argc, char **argv)
     struct sockaddr_in clientaddr, serveraddr;
     int server_sockfd;
     int client_sockfd;
-    int client_len;    
+    int client_len;
 
     // 풀사이즈 검사
     if ((pool_size < 0) || (pool_size > MAX_THREAD_POOL))
@@ -72,6 +78,12 @@ int main(int argc, char **argv)
         cout << "Pool size Error" << endl;
         exit(0);    
     }
+
+	// Make Message queue
+	if(create_msg_queue(s_info.msgqueue_id)==-1)
+	{
+		exit(0);
+	}
 
     // Make Socket
     if ((server_sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -220,10 +232,11 @@ void *thread_func(void *data)
 			    perror("recv");
 		        exit(1);
 		    }
-		    buf[numbytes] = '\0';
-			sprintf(buff, "<%d>: %s", mynum, buf);
+		    
             if (strstr(buf, "quit") == NULL)
             {
+				buf[numbytes] = '\0';
+				sprintf(buff, "<%d>: %s", mynum, buf);
 				mi = s_info.phinfo.begin();
                 while(mi != s_info.phinfo.end())
                 {
@@ -233,6 +246,7 @@ void *thread_func(void *data)
 					}
 					mi++;
 				}
+				send_message(s_info.msgqueue_id, buff);
             }
             else
             {
@@ -276,4 +290,25 @@ void *mon_thread(void *data)
             mi ++;
         }
     }
+}
+
+int create_msg_queue(int &msgqueue_id)
+{
+	key_t key; 
+	key = ftok("chatserver", 'm');
+	if ((msgqueue_id = msgget(key, IPC_CREAT|0660)) == -1) { 
+		perror("msgget"); 
+		return -1; 
+	}
+	cout<<"message queue id is "<<msgqueue_id<<endl;
+	return 0;
+}
+
+int send_message(int qid, char *text) 
+{  
+	if ((msgsnd(qid, text, strlen(text), 0)) ==-1) { 
+		perror("msgsnd"); 
+		return -1; 
+	}
+	return 0;
 }

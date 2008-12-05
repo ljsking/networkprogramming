@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
@@ -12,6 +11,9 @@
 #include <netdb.h>
 #include <sys/event.h>
 #include <sys/time.h>
+#include "simclist.h"
+
+#include "util.h"
 
 typedef struct in_addr in_addr;
 typedef struct sockaddr_in sockaddr_in;
@@ -28,81 +30,18 @@ typedef struct {
 	unsigned	bufsiz;
 } ecb;
 
-static char const *pname;
+char const *pname;
 static struct kevent *ke_vec = NULL;
 static unsigned ke_vec_alloc = 0;
 static unsigned ke_vec_used = 0;
 static char const protoname[] = "tcp";
 static char const servname[] = "echo";
-
-static void
-vlog (char const *const fmt, va_list ap)
-{
-	 vfprintf (stderr, fmt, ap);
-	 fputc ('\n', stderr);
-}
-
-static void fatal (char const *const fmt, ...)
-    __attribute__ ((__noreturn__));
-
-static void
-fatal (char const *const fmt, ...)
-{
-	 va_list ap;
-
-	 va_start (ap, fmt);
-	 fprintf (stderr, "%s: ", pname);
-	 vlog (fmt, ap);
-	 va_end (ap);
-	 exit (1);
-}
-
-static void
-error (char const *const fmt, ...)
-{
-	 va_list ap;
-
-	 va_start (ap, fmt);
-	 fprintf (stderr, "%s: ", pname);
-	 vlog (fmt, ap);
-	 va_end (ap);
-}
+static list_t clientList;
 
 static void
 usage (void)
 {
 	fatal ("Usage `%s [-p port]'", pname);
-}
-
-static int
-all_digits (register char const *const s)
-{
-	 register char const *r;
-
-	 for (r = s; *r; r++)
-	 	 if (!isdigit (*r))
-		     return 0;
-	 return 1;
-}
-
-static void *
-xmalloc (register unsigned long const size)
-{
-	register void *const result = malloc (size);
-
-	if (!result)
-		fatal ("Memory exhausted");
-	return result;
-}
-
-static void *
-xrealloc (register void *const ptr, register unsigned long const size)
-{
-	register void *const result = realloc (ptr, size);
-
-	if (!result)
-		fatal ("Memory exhausted");
-	return result;
 }
 
 static void
@@ -163,6 +102,9 @@ do_read (register struct kevent const *const kep)
 	auto char buf[bufsize];
 	register int n;
 	register ecb *const ecbp = (ecb *) kep->udata;
+	int client;
+	
+	printf("original ecbp = %d\n", ecbp);
 
 	if ((n = read (kep->ident, buf, bufsize)) == -1)
 	{
@@ -182,7 +124,13 @@ do_read (register struct kevent const *const kep)
 	memcpy (ecbp->buf, buf, n);
 
 	ke_change (kep->ident, EVFILT_READ, EV_DISABLE, kep->udata);
-	ke_change (kep->ident, EVFILT_WRITE, EV_ENABLE, kep->udata);
+	list_iterator_start(&clientList);/* starting an iteration "session" */
+	while (list_iterator_hasnext(&clientList)) { /* tell whether more values available */
+		client = (int)list_iterator_next(&clientList);
+		printf("Want to send message to %d from %d\n", client, kep->ident);
+		ke_change (client, EVFILT_WRITE, EV_ENABLE, kep->udata);
+	}
+	list_iterator_stop(&clientList);
 }
 
 static void
@@ -203,7 +151,7 @@ do_accept (register struct kevent const *const kep)
 	ecbp->bufsiz = 0;
 
 	printf("Client is connected socketID:(%d)\n", s);
-
+	list_append(& clientList, (void *)s);
 	ke_change (s, EVFILT_READ, EV_ADD | EV_ENABLE, ecbp);
 	ke_change (s, EVFILT_WRITE, EV_ADD | EV_DISABLE, ecbp);
 }
@@ -216,7 +164,6 @@ event_loop (register int const kq)
 {
 	for (;;)
 	{
-		printf("event_loop is doing here!\n");
 		register int n;
 		register struct kevent const *kep;
 
@@ -253,6 +200,8 @@ main (register int const argc, register char *const argv[])
 	register servent *servp;
 	auto ecb listen_ecb;
 	register int kq;
+	
+	list_init(&clientList);
 
 	pname = strrchr (argv[0], '/');
 	pname = pname ? pname+1 : argv[0];
@@ -314,7 +263,7 @@ main (register int const argc, register char *const argv[])
 	listen_ecb.do_read = do_accept;
 	listen_ecb.do_write = NULL;
 	listen_ecb.buf = NULL;
-	listen_ecb.buf = 0;
+	listen_ecb.bufsiz = 0;
 
 	ke_change (server_sock, EVFILT_READ, EV_ADD | EV_ENABLE, &listen_ecb);
 

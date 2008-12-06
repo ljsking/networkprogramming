@@ -24,9 +24,9 @@ typedef void (action) (register struct kevent const *const kep);
 
 /* Event Control Block (ecb) */
 typedef struct {
-	action	*do_read;
-	action	*do_write;
-	char	*buf;
+	action		*do_read;
+	action		*do_write;
+	char		*buf;
 	unsigned	bufsiz;
 } ecb;
 
@@ -53,13 +53,10 @@ ke_change (register int const ident,
 	enum { initial_alloc = 64 };
 	register struct kevent *kep;
 
-	if (!ke_vec_alloc)
-	{
+	if (!ke_vec_alloc){
 		ke_vec_alloc = initial_alloc;
 		ke_vec = (struct kevent *) xmalloc(ke_vec_alloc * sizeof (struct kevent));
-	}
-	else if (ke_vec_used == ke_vec_alloc)
-	{
+	}else if (ke_vec_used == ke_vec_alloc){
 		ke_vec_alloc <<= 1;
 		ke_vec =
 		(struct kevent *) xrealloc (ke_vec,
@@ -81,18 +78,16 @@ do_write (register struct kevent const *const kep)
 {
 	register int n;
 	register ecb *const ecbp = (ecb *) kep->udata;
-	//sleep(2); make a delay to check needs of multi-thread.
+	printf("write to %d %s\n", kep->ident, ecbp->buf);
 	n = write (kep->ident, ecbp->buf, ecbp->bufsiz);
-	free (ecbp->buf);  /* Free this buffer, no matter what.  */
 	if (n == -1)
 	{
 		error ("Error writing socket: %s", strerror (errno));
 		close (kep->ident);
-		free (kep->udata);
 	}
-
+	free(ecbp->buf);
+	free(ecbp);
 	ke_change (kep->ident, EVFILT_WRITE, EV_DISABLE, kep->udata);
-	ke_change (kep->ident, EVFILT_READ, EV_ENABLE, kep->udata);
 }
 
 static void
@@ -100,35 +95,40 @@ do_read (register struct kevent const *const kep)
 {
 	enum { bufsize = 1024 };
 	auto char buf[bufsize];
+	auto char sentMsg[bufsize];
 	register int n;
-	register ecb *const ecbp = (ecb *) kep->udata;
-	int client;
-	
-	printf("original ecbp = %d\n", ecbp);
+	int from, to;
+	ecb *ecbp = NULL;
 
 	if ((n = read (kep->ident, buf, bufsize)) == -1)
 	{
 		error ("Error reading socket: %s", strerror (errno));
 		close (kep->ident);
-		free (kep->udata);
+		if(kep->udata)
+			free (kep->udata);
 	}
 	else if (n == 0)
 	{
 		error ("EOF reading socket");
 		close (kep->ident);
-		free (kep->udata);
+		if(kep->udata)
+			free (kep->udata);
 	}
-
-	ecbp->buf = (char *) xmalloc (n);
-	ecbp->bufsiz = n;
-	memcpy (ecbp->buf, buf, n);
-
-	ke_change (kep->ident, EVFILT_READ, EV_DISABLE, kep->udata);
+	from = kep->ident;
+	sprintf(sentMsg, "<%d>:%s", from, buf);
 	list_iterator_start(&clientList);/* starting an iteration "session" */
 	while (list_iterator_hasnext(&clientList)) { /* tell whether more values available */
-		client = (int)list_iterator_next(&clientList);
-		printf("Want to send message to %d from %d\n", client, kep->ident);
-		ke_change (client, EVFILT_WRITE, EV_ENABLE, kep->udata);
+		to = (int)list_iterator_next(&clientList);
+		if(to != from){
+			ecbp = xmalloc(sizeof(ecb));
+			ecbp->do_read = do_read;
+			ecbp->do_write = do_write;
+			n = sizeof(sentMsg);
+			ecbp->buf = (char *) xmalloc (n);
+			strcpy(ecbp->buf, sentMsg);
+			ecbp->bufsiz = n;
+			ke_change (to, EVFILT_WRITE, EV_ENABLE, ecbp);
+		}
 	}
 	list_iterator_stop(&clientList);
 }
@@ -166,10 +166,8 @@ event_loop (register int const kq)
 	{
 		register int n;
 		register struct kevent const *kep;
-
 		n = kevent (kq, ke_vec, ke_vec_used, ke_vec, ke_vec_alloc, NULL);
 		ke_vec_used = 0;  /* Already processed all changes.  */
-
 		if (n == -1)
 			fatal ("Error in kevent(): %s", strerror (errno));
 		if (n == 0)
@@ -178,7 +176,6 @@ event_loop (register int const kq)
 		for (kep = ke_vec; kep < &ke_vec[n]; kep++)
 		{
 			register ecb const *const ecbp = (ecb *) kep->udata;
-
 			if (kep->filter == EVFILT_READ)
 				(*ecbp->do_read) (kep);
 			else

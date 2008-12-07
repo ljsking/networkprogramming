@@ -4,11 +4,16 @@ CFALGS = -g -c -std=c99
 
 TARGET = server
 
-$(TARGET): $(OBJECTS)
-	$(CC) -o $(TARGET) -std=c99 $(OBJECTS)
+all: server client
+
+server: $(OBJECTS)
+	$(CC) -o server -std=c99 $(OBJECTS)
+	
+client: client.c
+	$(CC) -o client -std=c99 client.c
 	
 clean:
-	rm $(OBJECTS) $(TARGET)
+	rm $(OBJECTS) client $(TARGET)
 	
 server.o: server.c util.h
 	$(CC) $(CFALGS) server.c

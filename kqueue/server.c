@@ -78,7 +78,7 @@ do_write (register struct kevent const *const kep)
 {
 	register int n;
 	register ecb *const ecbp = (ecb *) kep->udata;
-	printf("write to %d %s\n", kep->ident, ecbp->buf);
+	//printf("write to %d %s\n", kep->ident, ecbp->buf);
 	n = write (kep->ident, ecbp->buf, ecbp->bufsiz);
 	if (n == -1)
 	{
@@ -115,7 +115,8 @@ do_read (register struct kevent const *const kep)
 			free (kep->udata);
 	}
 	from = kep->ident;
-	sprintf(sentMsg, "<%d>:%s", from, buf);
+	//printf("read from client %s\n", buf);
+	sprintf(sentMsg, "<%d>:%s\n", from, buf);
 	list_iterator_start(&clientList);/* starting an iteration "session" */
 	while (list_iterator_hasnext(&clientList)) { /* tell whether more values available */
 		to = (int)list_iterator_next(&clientList);
@@ -231,10 +232,7 @@ main (register int const argc, register char *const argv[])
 
 	if (portno == 0)
 	{
-		if ((servp = getservbyname (servname, protoname)) == NULL)
-			fatal ("Error getting port number for service `%s': %s",
-					servname, strerror (errno));
-					portno = ntohs (servp->s_port);
+		portno = 1234;
 	}
 
 	if ((server_sock = socket (PF_INET, SOCK_STREAM, 0)) == -1)

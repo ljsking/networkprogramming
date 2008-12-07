@@ -11,24 +11,14 @@
 #include <netdb.h>
 #include <sys/event.h>
 #include <sys/time.h>
+#include <pthread.h>
+
 #include "simclist.h"
 
+#include "actions.h"
 #include "util.h"
 
-typedef struct in_addr in_addr;
-typedef struct sockaddr_in sockaddr_in;
-typedef struct servent servent;
-typedef struct timespec timespec;
-
-typedef void (action) (register struct kevent const *const kep);
-
-/* Event Control Block (ecb) */
-typedef struct {
-	action		*do_read;
-	action		*do_write;
-	char		*buf;
-	unsigned	bufsiz;
-} ecb;
+#include "server.h"
 
 char const *pname;
 static struct kevent *ke_vec = NULL;
@@ -36,7 +26,10 @@ static unsigned ke_vec_alloc = 0;
 static unsigned ke_vec_used = 0;
 static char const protoname[] = "tcp";
 static char const servname[] = "echo";
-static list_t clientList;
+list_t clientList;
+list_t eventList;
+static int kq;
+static int monitor;
 
 static void
 usage (void)
@@ -44,7 +37,7 @@ usage (void)
 	fatal ("Usage `%s [-p port]'", pname);
 }
 
-static void
+void
 ke_change (register int const ident,
 	   register int const filter,
 	   register int const flags,
@@ -73,90 +66,6 @@ ke_change (register int const ident,
 	kep->udata = udata;
 }
 
-static void
-do_write (register struct kevent const *const kep)
-{
-	register int n;
-	register ecb *const ecbp = (ecb *) kep->udata;
-	//printf("write to %d %s\n", kep->ident, ecbp->buf);
-	n = write (kep->ident, ecbp->buf, ecbp->bufsiz);
-	if (n == -1)
-	{
-		error ("Error writing socket: %s", strerror (errno));
-		close (kep->ident);
-	}
-	free(ecbp->buf);
-	free(ecbp);
-	ke_change (kep->ident, EVFILT_WRITE, EV_DISABLE, kep->udata);
-}
-
-static void
-do_read (register struct kevent const *const kep)
-{
-	enum { bufsize = 1024 };
-	auto char buf[bufsize];
-	auto char sentMsg[bufsize];
-	register int n;
-	int from, to;
-	ecb *ecbp = NULL;
-
-	if ((n = read (kep->ident, buf, bufsize)) == -1)
-	{
-		error ("Error reading socket: %s", strerror (errno));
-		close (kep->ident);
-		if(kep->udata)
-			free (kep->udata);
-	}
-	else if (n == 0)
-	{
-		error ("EOF reading socket");
-		close (kep->ident);
-		if(kep->udata)
-			free (kep->udata);
-	}
-	from = kep->ident;
-	//printf("read from client %s\n", buf);
-	sprintf(sentMsg, "<%d>:%s\n", from, buf);
-	list_iterator_start(&clientList);/* starting an iteration "session" */
-	while (list_iterator_hasnext(&clientList)) { /* tell whether more values available */
-		to = (int)list_iterator_next(&clientList);
-		if(to != from){
-			ecbp = xmalloc(sizeof(ecb));
-			ecbp->do_read = do_read;
-			ecbp->do_write = do_write;
-			n = sizeof(sentMsg);
-			ecbp->buf = (char *) xmalloc (n);
-			strcpy(ecbp->buf, sentMsg);
-			ecbp->bufsiz = n;
-			ke_change (to, EVFILT_WRITE, EV_ENABLE, ecbp);
-		}
-	}
-	list_iterator_stop(&clientList);
-}
-
-static void
-do_accept (register struct kevent const *const kep)
-{
-	auto sockaddr_in sin;
-	auto socklen_t sinsiz;
-	register int s;
-	register ecb *ecbp;
-
-	if ((s = accept (kep->ident, (struct sockaddr *)&sin, &sinsiz)) == -1)
-		fatal ("Error in accept(): %s", strerror (errno));
-
-	ecbp = (ecb *) xmalloc (sizeof (ecb));
-	ecbp->do_read = do_read;
-	ecbp->do_write = do_write;
-	ecbp->buf = NULL;
-	ecbp->bufsiz = 0;
-
-	printf("Client is connected socketID:(%d)\n", s);
-	list_append(& clientList, (void *)s);
-	ke_change (s, EVFILT_READ, EV_ADD | EV_ENABLE, ecbp);
-	ke_change (s, EVFILT_WRITE, EV_ADD | EV_DISABLE, ecbp);
-}
-
 static void event_loop (register int const kq)
     __attribute__ ((__noreturn__));
 
@@ -176,12 +85,30 @@ event_loop (register int const kq)
 
 		for (kep = ke_vec; kep < &ke_vec[n]; kep++)
 		{
-			register ecb const *const ecbp = (ecb *) kep->udata;
-			if (kep->filter == EVFILT_READ)
-				(*ecbp->do_read) (kep);
-			else
-				(*ecbp->do_write) (kep);
+			ecb *ecbp = (ecb *) kep->udata;
+			element *ele = malloc(sizeof(element));
+			ele->fd = kep->ident;
+			ele->filter = kep->filter;
+			ele->ecbp = ecbp;
+			list_append(&eventList, ele);
+			ke_change (ele->fd, ele->filter, EV_DISABLE, ecbp);
 		}
+	}
+}
+
+void *thread_func(){
+	for (;;)
+	{
+		if(list_size(&eventList)>0){
+			element *ele = list_extract_at(&eventList, 0);
+			register ecb const *const ecbp = ele->ecbp;
+			if (ele->filter == EVFILT_READ)
+				(*ecbp->do_read) (ele);
+			else
+				(*ecbp->do_write) (ele);
+		}
+		
+		sleep(1);
 	}
 }
 
@@ -197,9 +124,9 @@ main (register int const argc, register char *const argv[])
 	auto sockaddr_in sin;
 	register servent *servp;
 	auto ecb listen_ecb;
-	register int kq;
 	
 	list_init(&clientList);
+	list_init(&eventList);
 
 	pname = strrchr (argv[0], '/');
 	pname = pname ? pname+1 : argv[0];
@@ -254,13 +181,18 @@ main (register int const argc, register char *const argv[])
 
 	if ((kq = kqueue ()) == -1)
 		fatal ("Error creating kqueue: %s", strerror (errno));
+	if ((monitor = kqueue ()) == -1)
+		fatal ("Error creating kqueue: %s", strerror (errno));	
 
 	listen_ecb.do_read = do_accept;
 	listen_ecb.do_write = NULL;
 	listen_ecb.buf = NULL;
 	listen_ecb.bufsiz = 0;
 
-	ke_change (server_sock, EVFILT_READ, EV_ADD | EV_ENABLE, &listen_ecb);
+	ke_change (server_sock, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, &listen_ecb);
+	
+	pthread_t p_thread;
+	pthread_create(&p_thread, NULL, thread_func, (void *)NULL);
 
 	event_loop (kq);
 }

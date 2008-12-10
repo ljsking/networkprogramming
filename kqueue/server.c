@@ -31,6 +31,10 @@ list_t eventList;
 int kq;
 int listener_fd;
 
+pthread_mutex_t count_mutex;
+pthread_cond_t count_threshold_cv;
+
+
 static void
 usage (void)
 {
@@ -94,17 +98,23 @@ event_loop ()
 		else
 			ev->do_action = do_write;
 		list_append(&eventList, ev);
+		pthread_mutex_lock(&count_mutex);
+		pthread_cond_signal(&count_threshold_cv);
+		pthread_mutex_unlock(&count_mutex);
 	}
 }
 
 void *thread_func(){
 	for (;;)
 	{
+		pthread_mutex_lock(&count_mutex);
+		pthread_cond_wait(&count_threshold_cv, &count_mutex);
+		pthread_mutex_unlock(&count_mutex);
+		
 		if(list_size(&eventList)>0){
 			event *ev = list_extract_at(&eventList, 0);
 			(*ev->do_action) (ev);
 		}
-		sleep(1);
 	}
 }
 
@@ -122,6 +132,9 @@ main (register int const argc, register char *const argv[])
 	
 	list_init(&clientList);
 	list_init(&eventList);
+	
+	pthread_mutex_init(&count_mutex, NULL);
+	pthread_cond_init (&count_threshold_cv, NULL);
 
 	pname = strrchr (argv[0], '/');
 	pname = pname ? pname+1 : argv[0];

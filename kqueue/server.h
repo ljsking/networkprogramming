@@ -24,6 +24,7 @@ typedef struct {
 typedef struct {
 	action 	*do_action;
 	int		fd;
+	void 	*data;
 } event;
 
 void

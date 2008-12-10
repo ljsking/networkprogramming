@@ -21,19 +21,17 @@
 void
 do_write (void *arg)
 {
-	register int n;
-	element *kep = arg;
-	register ecb *const ecbp = kep->ecbp;
-	//printf("write to %d %s\n", kep->ident, ecbp->buf);
-	n = write (kep->fd, ecbp->buf, ecbp->bufsiz);
+	event *ev = arg;
+	char *msg = ev->data;
+	int to = ev->fd;
+	int n = write (to, msg, strlen(msg));
 	if (n == -1)
 	{
 		error ("Error writing socket: %s", strerror (errno));
-		close (kep->fd);
+		close (to);
 	}
-	free(ecbp->buf);
-	free(ecbp);
-	ke_change (kep->fd, EVFILT_WRITE, EV_DISABLE, kep->ecbp);
+	free(msg);
+	free(ev);
 }
 
 void
@@ -65,22 +63,19 @@ do_read (void *arg)
 	kevent(kq, &kev_client, 1, NULL, 0, NULL);
 	//printf("read from client %s\n", buf);
 	buf[n-1] = 0;
-	printf("<%d>:%s %d\n", from, buf, n);
-	//list_iterator_start(&clientList);/* starting an iteration "session" */
-	//while (list_iterator_hasnext(&clientList)) { /* tell whether more values available */
-	/*	to = (int)list_iterator_next(&clientList);
+	sprintf(sentMsg, "<%d>:%s\n", from, buf);
+	list_iterator_start(&clientList);/* starting an iteration "session" */
+	while (list_iterator_hasnext(&clientList)) { /* tell whether more values available */
+		int to = (int)list_iterator_next(&clientList);
 		if(to != from){
-			ecbp = xmalloc(sizeof(ecb));
-			ecbp->do_read = do_read;
-			ecbp->do_write = do_write;
-			n = sizeof(sentMsg);
-			ecbp->buf = (char *) xmalloc (n);
-			strcpy(ecbp->buf, sentMsg);
-			ecbp->bufsiz = n;
-			ke_change (to, EVFILT_WRITE, EV_ENABLE, ecbp);
+			char *buf = malloc(sizeof(char)*strlen(sentMsg));
+			strcpy(buf, sentMsg);
+			struct kevent kev_client;
+			EV_SET(&kev_client, to, EVFILT_WRITE, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, buf);
+			kevent(kq, &kev_client, 1, NULL, 0, NULL);
 		}
 	}
-	list_iterator_stop(&clientList);*/
+	list_iterator_stop(&clientList);
 	
 }
 
@@ -95,9 +90,13 @@ do_accept (void *arg)
 	if ((s = accept (listener_fd, (struct sockaddr *)&sin, &sinsiz)) == -1)
 		fatal ("Error in accept(): %s", strerror (errno));
 	printf("Client is connected socketID:(%d)\n", s);
+	
+	list_append(&clientList, (void *)s);
+	
 	struct kevent kev_listener;
 	EV_SET(&kev_listener, listener_fd, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, NULL);
 	kevent(kq, &kev_listener, 1, NULL, 0, NULL);
+	
 	struct kevent kev_client;
 	EV_SET(&kev_client, s, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, NULL);
 	kevent(kq, &kev_client, 1, NULL, 0, NULL);

@@ -44,7 +44,6 @@ int main(int argc, char *argv[])
 			size = strlen(sendline);
 			if (send(s, sendline, strlen(sendline), 0) != size)
 				printf("error in size\n");
-			printf("send a message %d, %s\n", size, sendline);
 		}
 		close(s);
 		exit(0);

@@ -84,6 +84,7 @@ event_loop ()
 		printf("get a event\n");
 		event *ev = malloc(sizeof(ev));
 		ev->fd = received_event.ident;
+		ev->data = received_event.udata;
 		if(received_event.filter == EVFILT_READ){
 			if(received_event.ident == listener_fd)
 				ev->do_action = do_accept;

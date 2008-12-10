@@ -80,7 +80,7 @@ do_read (void *arg)
 }
 
 void
-do_accept ()
+do_accept (void *arg)
 {
 	auto sockaddr_in sin;
 	auto socklen_t sinsiz;

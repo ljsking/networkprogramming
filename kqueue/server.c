@@ -82,17 +82,17 @@ event_loop ()
 		if (n == 0)
 			fatal ("No events received!");
 		printf("get a event\n");
-		do_accept();
-		/*for (kep = ke_vec; kep < &ke_vec[n]; kep++)
-		{
-			ecb *ecbp = (ecb *) kep->udata;
-			element *ele = malloc(sizeof(element));
-			ele->fd = kep->ident;
-			ele->filter = kep->filter;
-			ele->ecbp = ecbp;
-			list_append(&eventList, ele);
-			printf("get a event\n");
-		}*/
+		event *ev = malloc(sizeof(ev));
+		ev->fd = received_event.ident;
+		if(received_event.filter == EVFILT_READ){
+			if(received_event.ident == listener_fd)
+				ev->do_action = do_accept;
+			else
+				ev->do_action = do_read;
+		}
+		else
+			ev->do_action = do_write;
+		list_append(&eventList, ev);
 	}
 }
 
@@ -100,12 +100,8 @@ void *thread_func(){
 	for (;;)
 	{
 		if(list_size(&eventList)>0){
-			element *ele = list_extract_at(&eventList, 0);
-			register ecb const *const ecbp = ele->ecbp;
-			if (ele->filter == EVFILT_READ)
-				(*ecbp->do_read) (ele);
-			else
-				(*ecbp->do_write) (ele);
+			event *ev = list_extract_at(&eventList, 0);
+			(*ev->do_action) (ev);
 		}
 		sleep(1);
 	}

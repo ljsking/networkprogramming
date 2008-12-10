@@ -21,6 +21,11 @@ typedef struct {
 	uintptr_t	fd;
 } element;
 
+typedef struct {
+	action 	*do_action;
+	int		fd;
+} event;
+
 void
 ke_change (register int const ident,
 	   	register int const filter,

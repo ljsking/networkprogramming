@@ -80,26 +80,27 @@ do_read (void *arg)
 }
 
 void
-do_accept (void *arg)
+do_accept ()
 {
 	auto sockaddr_in sin;
 	auto socklen_t sinsiz;
 	register int s;
 	register ecb *ecbp;
-	element *kep = arg;
 
-	if ((s = accept (kep->fd, (struct sockaddr *)&sin, &sinsiz)) == -1)
+	if ((s = accept (listener_fd, (struct sockaddr *)&sin, &sinsiz)) == -1)
 		fatal ("Error in accept(): %s", strerror (errno));
 
-	ecbp = (ecb *) xmalloc (sizeof (ecb));
+	/*ecbp = (ecb *) xmalloc (sizeof (ecb));
 	ecbp->do_read = do_read;
 	ecbp->do_write = do_write;
 	ecbp->buf = NULL;
-	ecbp->bufsiz = 0;
+	ecbp->bufsiz = 0;*/
 
 	printf("Client is connected socketID:(%d)\n", s);
-	list_append(& clientList, (void *)s);
-	ke_change (s, EVFILT_READ, EV_ADD | EV_ENABLE, ecbp);
-	ke_change (s, EVFILT_WRITE, EV_ADD | EV_DISABLE, ecbp);
-	ke_change (kep->fd, EVFILT_READ, EV_ONESHOT, ecbp);
+	//list_append(& clientList, (void *)s);
+	//ke_change (s, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, ecbp);
+	//ke_change (s, EVFILT_WRITE, EV_ADD | EV_DISABLE | EV_ONESHOT, ecbp);
+	struct kevent kev_listener;
+	EV_SET(&kev_listener, listener_fd, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, NULL);
+	kevent(kq, &kev_listener, 1, NULL, 0, NULL);
 }

@@ -28,8 +28,8 @@ static char const protoname[] = "tcp";
 static char const servname[] = "echo";
 list_t clientList;
 list_t eventList;
-static int kq;
-static int monitor;
+int kq;
+int listener_fd;
 
 static void
 usage (void)
@@ -66,24 +66,24 @@ ke_change (register int const ident,
 	kep->udata = udata;
 }
 
-static void event_loop (register int const kq)
+static void event_loop ()
     __attribute__ ((__noreturn__));
 
 static void
-event_loop (register int const kq)
+event_loop ()
 {
 	for (;;)
 	{
 		register int n;
-		register struct kevent const *kep;
-		n = kevent (kq, ke_vec, ke_vec_used, ke_vec, ke_vec_alloc, NULL);
-		ke_vec_used = 0;  /* Already processed all changes.  */
+		struct kevent received_event;
+		n = kevent(kq, NULL, 0, &received_event, 1, NULL);
 		if (n == -1)
 			fatal ("Error in kevent(): %s", strerror (errno));
 		if (n == 0)
 			fatal ("No events received!");
-
-		for (kep = ke_vec; kep < &ke_vec[n]; kep++)
+		printf("get a event\n");
+		do_accept();
+		/*for (kep = ke_vec; kep < &ke_vec[n]; kep++)
 		{
 			ecb *ecbp = (ecb *) kep->udata;
 			element *ele = malloc(sizeof(element));
@@ -91,8 +91,8 @@ event_loop (register int const kq)
 			ele->filter = kep->filter;
 			ele->ecbp = ecbp;
 			list_append(&eventList, ele);
-			ke_change (ele->fd, ele->filter, EV_DISABLE, ecbp);
-		}
+			printf("get a event\n");
+		}*/
 	}
 }
 
@@ -107,7 +107,6 @@ void *thread_func(){
 			else
 				(*ecbp->do_write) (ele);
 		}
-		
 		sleep(1);
 	}
 }
@@ -120,7 +119,6 @@ main (register int const argc, register char *const argv[])
 	auto int one = 1;
 	register int portno = 0;
 	register int option_errors = 0;
-	register int server_sock;
 	auto sockaddr_in sin;
 	register servent *servp;
 	auto ecb listen_ecb;
@@ -162,10 +160,10 @@ main (register int const argc, register char *const argv[])
 		portno = 1234;
 	}
 
-	if ((server_sock = socket (PF_INET, SOCK_STREAM, 0)) == -1)
+	if ((listener_fd = socket (PF_INET, SOCK_STREAM, 0)) == -1)
 		fatal ("Error creating socket: %s", strerror (errno));
 
-	if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one) == -1)
+	if (setsockopt(listener_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one) == -1)
 		fatal ("Error setting SO_REUSEADDR for socket: %s", strerror (errno));
 
 	memset (&sin, 0, sizeof sin);
@@ -173,26 +171,23 @@ main (register int const argc, register char *const argv[])
 	sin.sin_addr = listen_addr;
 	sin.sin_port = htons (portno);
 
-	if (bind (server_sock, (const struct sockaddr *)&sin, sizeof sin) == -1)
+	if (bind (listener_fd, (const struct sockaddr *)&sin, sizeof sin) == -1)
 		fatal ("Error binding socket: %s", strerror (errno));
 
-	if (listen (server_sock, 20) == -1)
+	if (listen (listener_fd, 20) == -1)
 		fatal ("Error listening to socket: %s", strerror (errno));
 
 	if ((kq = kqueue ()) == -1)
 		fatal ("Error creating kqueue: %s", strerror (errno));
-	if ((monitor = kqueue ()) == -1)
-		fatal ("Error creating kqueue: %s", strerror (errno));	
 
-	listen_ecb.do_read = do_accept;
-	listen_ecb.do_write = NULL;
-	listen_ecb.buf = NULL;
-	listen_ecb.bufsiz = 0;
-
-	ke_change (server_sock, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, &listen_ecb);
+	//ke_change (server_sock, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, &listen_ecb);
+	
+	struct kevent kev_listener;
+	EV_SET(&kev_listener, listener_fd, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, NULL);
+	kevent(kq, &kev_listener, 1, NULL, 0, NULL);
 	
 	pthread_t p_thread;
 	pthread_create(&p_thread, NULL, thread_func, (void *)NULL);
 
-	event_loop (kq);
+	event_loop ();
 }

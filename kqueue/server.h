@@ -29,4 +29,6 @@ ke_change (register int const ident,
 
 extern list_t clientList;
 extern list_t eventList;
+extern int kq;
+extern int listener_fd;
 #endif

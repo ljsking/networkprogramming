@@ -64,7 +64,7 @@ do_read (void *arg)
 	EV_SET(&kev_client, from, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, NULL);
 	kevent(kq, &kev_client, 1, NULL, 0, NULL);
 	//printf("read from client %s\n", buf);
-	buf[n-2] = 0;
+	buf[n-1] = 0;
 	printf("<%d>:%s %d\n", from, buf, n);
 	//list_iterator_start(&clientList);/* starting an iteration "session" */
 	//while (list_iterator_hasnext(&clientList)) { /* tell whether more values available */

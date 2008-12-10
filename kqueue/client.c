@@ -41,13 +41,10 @@ int main(int argc, char *argv[])
   	printf("connect server\n");
   	if ((pid = fork()) > 0) {
 		while (fgets(sendline, MAXLINE,stdin) != NULL) {
-			char *ln = strstr(sendline, "\n");
-			strncpy(line, sendline, ln-sendline);
-			size = strlen(line);
-			line[size++] = '\n';
-			line[size++] = '\0';
-			if (send(s, line, size, 0) != size)
+			size = strlen(sendline);
+			if (send(s, sendline, strlen(sendline), 0) != size)
 				printf("error in size\n");
+			printf("send a message %d, %s\n", size, sendline);
 		}
 		close(s);
 		exit(0);

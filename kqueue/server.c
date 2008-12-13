@@ -20,6 +20,8 @@
 
 #include "server.h"
 
+#define NUM_THREADS 3
+
 char const *pname;
 static struct kevent *ke_vec = NULL;
 static unsigned ke_vec_alloc = 0;
@@ -31,47 +33,15 @@ list_t eventList;
 int kq;
 int listener_fd;
 
-pthread_mutex_t count_mutex;
-pthread_cond_t count_threshold_cv;
-
+pthread_mutex_t 	mutex[NUM_THREADS];
+pthread_cond_t 		cond_variable[NUM_THREADS];
+int					current_working_thread;
 
 static void
 usage (void)
 {
 	fatal ("Usage `%s [-p port]'", pname);
 }
-
-void
-ke_change (register int const ident,
-	   register int const filter,
-	   register int const flags,
-	   register void *const udata)
-{
-	enum { initial_alloc = 64 };
-	register struct kevent *kep;
-
-	if (!ke_vec_alloc){
-		ke_vec_alloc = initial_alloc;
-		ke_vec = (struct kevent *) xmalloc(ke_vec_alloc * sizeof (struct kevent));
-	}else if (ke_vec_used == ke_vec_alloc){
-		ke_vec_alloc <<= 1;
-		ke_vec =
-		(struct kevent *) xrealloc (ke_vec,
-				ke_vec_alloc * sizeof (struct kevent));
-	}
-
-	kep = &ke_vec[ke_vec_used++];
-
-	kep->ident = ident;
-	kep->filter = filter;
-	kep->flags = flags;
-	kep->fflags = 0;
-	kep->data = 0;
-	kep->udata = udata;
-}
-
-static void event_loop ()
-    __attribute__ ((__noreturn__));
 
 static void
 event_loop ()
@@ -98,43 +68,46 @@ event_loop ()
 		else
 			ev->do_action = do_write;
 		list_append(&eventList, ev);
-		pthread_mutex_lock(&count_mutex);
-		pthread_cond_signal(&count_threshold_cv);
-		pthread_mutex_unlock(&count_mutex);
+		int i;
+		if(list_size(&eventList)>2)
+			current_working_thread=(current_working_thread+1)%NUM_THREADS;
+		for(i=0;i<list_size(&eventList);i++){
+			pthread_mutex_lock(&mutex[current_working_thread]);
+			pthread_cond_signal(&cond_variable[current_working_thread]);
+			pthread_mutex_unlock(&mutex[current_working_thread]);
+		}
 	}
 }
 
-void *thread_func(){
+void *thread_func(void *arg){
+	int num = (int)arg;
 	for (;;)
 	{
-		pthread_mutex_lock(&count_mutex);
-		pthread_cond_wait(&count_threshold_cv, &count_mutex);
-		pthread_mutex_unlock(&count_mutex);
-		
+		pthread_mutex_lock(&mutex[num]);
+		pthread_cond_wait(&cond_variable[num], &mutex[num]);
+		pthread_mutex_unlock(&mutex[num]);
+		printf("start working %d thread\n", num);
 		if(list_size(&eventList)>0){
 			event *ev = list_extract_at(&eventList, 0);
 			(*ev->do_action) (ev);
 		}
+		printf("end working %d thread\n", num);
 	}
 }
 
 int
 main (register int const argc, register char *const argv[])
 {
-	auto in_addr listen_addr;
-	register int optch;
-	auto int one = 1;
-	register int portno = 0;
-	register int option_errors = 0;
+	in_addr listen_addr;
+	int optch;
+	int one = 1;
+	int portno = 0;
+	int option_errors = 0;
 	auto sockaddr_in sin;
 	register servent *servp;
-	auto ecb listen_ecb;
 	
 	list_init(&clientList);
 	list_init(&eventList);
-	
-	pthread_mutex_init(&count_mutex, NULL);
-	pthread_cond_init (&count_threshold_cv, NULL);
 
 	pname = strrchr (argv[0], '/');
 	pname = pname ? pname+1 : argv[0];
@@ -166,9 +139,7 @@ main (register int const argc, register char *const argv[])
 		usage ();
 
 	if (portno == 0)
-	{
 		portno = 1234;
-	}
 
 	if ((listener_fd = socket (PF_INET, SOCK_STREAM, 0)) == -1)
 		fatal ("Error creating socket: %s", strerror (errno));
@@ -190,14 +161,17 @@ main (register int const argc, register char *const argv[])
 	if ((kq = kqueue ()) == -1)
 		fatal ("Error creating kqueue: %s", strerror (errno));
 
-	//ke_change (server_sock, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, &listen_ecb);
-	
 	struct kevent kev_listener;
 	EV_SET(&kev_listener, listener_fd, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, NULL);
 	kevent(kq, &kev_listener, 1, NULL, 0, NULL);
 	
+	int i;
 	pthread_t p_thread;
-	pthread_create(&p_thread, NULL, thread_func, (void *)NULL);
-
+	for(i = 0;i<NUM_THREADS;i++){
+		pthread_mutex_init(&mutex[i], NULL);
+		pthread_cond_init (&cond_variable[i], NULL);
+		pthread_create(&p_thread, NULL, thread_func, (void *)i);
+	}
+	current_working_thread = 0;
 	event_loop ();
 }

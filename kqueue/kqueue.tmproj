@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>currentDocument</key>
+	<string>server.c</string>
 	<key>documents</key>
 	<array>
 		<dict>
@@ -14,19 +16,21 @@
 			<key>filename</key>
 			<string>server.c</string>
 			<key>lastUsed</key>
-			<date>2008-12-07T10:12:03Z</date>
+			<date>2008-12-11T02:15:38Z</date>
+			<key>selected</key>
+			<true/>
 		</dict>
 		<dict>
 			<key>filename</key>
 			<string>server.h</string>
 			<key>lastUsed</key>
-			<date>2008-12-07T07:56:29Z</date>
+			<date>2008-12-10T07:15:07Z</date>
 		</dict>
 		<dict>
 			<key>filename</key>
 			<string>client.c</string>
 			<key>lastUsed</key>
-			<date>2008-12-07T07:18:17Z</date>
+			<date>2008-12-10T07:02:53Z</date>
 		</dict>
 		<dict>
 			<key>filename</key>
@@ -44,30 +48,78 @@
 			<key>filename</key>
 			<string>actions.c</string>
 			<key>lastUsed</key>
-			<date>2008-12-07T10:12:03Z</date>
-			<key>selected</key>
-			<true/>
+			<date>2008-12-11T02:15:38Z</date>
 		</dict>
 		<dict>
 			<key>filename</key>
 			<string>actions.h</string>
 			<key>lastUsed</key>
-			<date>2008-12-07T07:56:28Z</date>
+			<date>2008-12-10T05:43:51Z</date>
 		</dict>
 		<dict>
 			<key>filename</key>
 			<string>simclist.h</string>
 			<key>lastUsed</key>
-			<date>2008-12-07T07:29:56Z</date>
+			<date>2008-12-10T07:24:03Z</date>
 		</dict>
 	</array>
 	<key>fileHierarchyDrawerWidth</key>
 	<integer>200</integer>
 	<key>metaData</key>
-	<dict/>
+	<dict>
+		<key>actions.c</key>
+		<dict>
+			<key>caret</key>
+			<dict>
+				<key>column</key>
+				<integer>3</integer>
+				<key>line</key>
+				<integer>35</integer>
+			</dict>
+			<key>firstVisibleColumn</key>
+			<integer>0</integer>
+			<key>firstVisibleLine</key>
+			<integer>29</integer>
+		</dict>
+		<key>server.c</key>
+		<dict>
+			<key>caret</key>
+			<dict>
+				<key>column</key>
+				<integer>14</integer>
+				<key>line</key>
+				<integer>86</integer>
+			</dict>
+			<key>columnSelection</key>
+			<false/>
+			<key>firstVisibleColumn</key>
+			<integer>0</integer>
+			<key>firstVisibleLine</key>
+			<integer>65</integer>
+			<key>selectFrom</key>
+			<dict>
+				<key>column</key>
+				<integer>2</integer>
+				<key>line</key>
+				<integer>86</integer>
+			</dict>
+			<key>selectTo</key>
+			<dict>
+				<key>column</key>
+				<integer>19</integer>
+				<key>line</key>
+				<integer>86</integer>
+			</dict>
+		</dict>
+	</dict>
+	<key>openDocuments</key>
+	<array>
+		<string>server.c</string>
+		<string>actions.c</string>
+	</array>
 	<key>showFileHierarchyDrawer</key>
 	<true/>
 	<key>windowFrame</key>
-	<string>{{2, 139}, {728, 739}}</string>
+	<string>{{66, 88}, {728, 739}}</string>
 </dict>
 </plist>

@@ -21,6 +21,7 @@
 void
 do_write (void *arg)
 {
+	printf("write msg\n");
 	event *ev = arg;
 	char *msg = ev->data;
 	int to = ev->fd;
@@ -32,21 +33,21 @@ do_write (void *arg)
 	}
 	free(msg);
 	free(ev);
+	//sleep(10);
 }
 
 void
 do_read (void *arg)
 {
+	printf("read msg\n");
 	enum { bufsize = 1024 };
-	auto char buf[bufsize];
-	auto char sentMsg[bufsize];
-	register int n;
+	char buf[bufsize];
+	char sentMsg[bufsize];
+	int n;
 	
 	event *ev = arg;
 	int from = ev->fd;
 	free(ev);
-	
-	printf("try to read from %d\n", from);
 
 	if ((n = read (from, buf, bufsize)) == -1)
 	{
@@ -61,7 +62,6 @@ do_read (void *arg)
 	struct kevent kev_client;
 	EV_SET(&kev_client, from, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, NULL);
 	kevent(kq, &kev_client, 1, NULL, 0, NULL);
-	//printf("read from client %s\n", buf);
 	buf[n-1] = 0;
 	sprintf(sentMsg, "<%d>:%s\n", from, buf);
 	list_iterator_start(&clientList);/* starting an iteration "session" */
@@ -82,10 +82,9 @@ do_read (void *arg)
 void
 do_accept (void *arg)
 {
-	auto sockaddr_in sin;
-	auto socklen_t sinsiz;
-	register int s;
-	register ecb *ecbp;
+	sockaddr_in sin;
+	socklen_t sinsiz;
+	int s;
 
 	if ((s = accept (listener_fd, (struct sockaddr *)&sin, &sinsiz)) == -1)
 		fatal ("Error in accept(): %s", strerror (errno));
